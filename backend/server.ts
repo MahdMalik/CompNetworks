@@ -13,46 +13,54 @@ const io = new IOServer(server, {
 type User = {
   socket: Socket;
   username: string;
+  role?: "artist" | "viewer";
 };
 
 // track online users: { socketId -> User }
 const onlineUsers = new Map<string, User>();
 
 // track users on main page: { socketId -> User }
-const mainPageUsers = new Map<string, User>();
+// Artists can see all viewers, viewers don't see anyone
+const availableViewers = new Map<string, User>();
 
-// track pending requests: { recipientSocketId -> { senderId, senderUsername } }
+// track pending requests: { recipientSocketId -> { senderId, senderUsername, senderRole } }
 const pendingRequests = new Map<
   string,
-  { senderId: string; senderUsername: string }
+  { senderId: string; senderUsername: string; senderRole: "artist" }
 >();
 
-// track active sessions: { sessionId -> { sockets: [Socket, Socket] } }
+// track active sessions: { sessionId -> { artistSocket: Socket, viewerSocket: Socket } }
 const sessions = new Map<
   string,
-  { sockets: [Socket, Socket] }
+  { artistSocket: Socket; viewerSocket: Socket }
 >();
 
 io.on("connection", (socket) => {
   console.log("socket connected:", socket.id);
 
-  socket.on("join_with_username", (username: string) => {
+  socket.on("join_with_username", (data: { username: string; role: "artist" | "viewer" }) => {
     // sanitize / validate username in real app
-    socket.data.username = username;
-    onlineUsers.set(socket.id, { socket, username });
-    mainPageUsers.set(socket.id, { socket, username });
+    socket.data.username = data.username;
+    socket.data.role = data.role;
 
-    // broadcast updated online users list (only main page users)
-    io.emit("online_users", Array.from(mainPageUsers.values()).map(u => ({
+    onlineUsers.set(socket.id, { socket, username: data.username, role: data.role });
+    
+    // track viewers that are available to receive requests
+    if (data.role === "viewer") {
+      availableViewers.set(socket.id, { socket, username: data.username, role: "viewer" });
+    }
+
+    // broadcast updated available viewers list (for artists to see)
+    io.emit("online_users", Array.from(availableViewers.values()).map(u => ({
       socketId: u.socket.id,
       username: u.username,
     })));
 
     socket.emit("ready", { socketId: socket.id });
-    console.log("user online:", username);
+    console.log("user online:", data.username, "as", data.role);
   });
 
-  // user requests to connect with another user
+  // user requests to connect with another user (artist sends request to viewer)
   socket.on("send_connection_request", (recipientSocketId: string) => {
     const recipient = onlineUsers.get(recipientSocketId);
     if (!recipient) {
@@ -62,6 +70,11 @@ io.on("connection", (socket) => {
 
     if (recipientSocketId === socket.id) {
       socket.emit("error_message", "Cannot connect with yourself");
+      return;
+    }
+
+    if (socket.data.role !== "artist") {
+      socket.emit("error_message", "Only artists can send connection requests");
       return;
     }
 
@@ -78,15 +91,17 @@ io.on("connection", (socket) => {
     pendingRequests.set(recipientSocketId, {
       senderId: socket.id,
       senderUsername: socket.data.username,
+      senderRole: "artist",
     });
 
     // notify recipient
     recipient.socket.emit("connection_request", {
       senderId: socket.id,
       senderUsername: socket.data.username,
+      senderRole: "artist",
     });
 
-    console.log(`connection request: ${socket.data.username} -> ${recipient.username}`);
+    console.log(`connection request: ${socket.data.username} (artist) -> ${recipient.username}`);
   });
 
   // recipient accepts the request
@@ -97,9 +112,9 @@ io.on("connection", (socket) => {
       return;
     }
 
-    const senderSocket = onlineUsers.get(senderId)?.socket;
-    if (!senderSocket) {
-      socket.emit("error_message", "Requester disconnected");
+    const artistSocket = onlineUsers.get(senderId)?.socket;
+    if (!artistSocket) {
+      socket.emit("error_message", "Artist disconnected");
       pendingRequests.delete(socket.id);
       return;
     }
@@ -111,25 +126,26 @@ io.on("connection", (socket) => {
     const sessionId = "sess_" + randomBytes(6).toString("hex");
     const room = sessionId;
 
-    senderSocket.join(room);
+    artistSocket.join(room);
     socket.join(room);
 
-    sessions.set(sessionId, { sockets: [senderSocket, socket] });
+    sessions.set(sessionId, { artistSocket, viewerSocket: socket });
 
     // notify both
-    senderSocket.emit("matched", { sessionId });
+    artistSocket.emit("matched", { sessionId });
     socket.emit("matched", { sessionId });
 
     // event for session page
     setTimeout(() => {
       io.to(room).emit("session_start", {
         sessionId,
-        users: [senderSocket.data.username, socket.data.username],
+        artistName: artistSocket.data.username,
+        viewerName: socket.data.username,
       });
     }, 400);
 
     console.log(
-      `matched ${senderSocket.data.username} <-> ${socket.data.username} in ${sessionId}`
+      `matched ${artistSocket.data.username} (artist) <-> ${socket.data.username} (viewer) in ${sessionId}`
     );
   });
 
@@ -141,9 +157,9 @@ io.on("connection", (socket) => {
       return;
     }
 
-    const senderSocket = onlineUsers.get(senderId)?.socket;
-    if (senderSocket) {
-      senderSocket.emit("connection_rejected", {
+    const artistSocket = onlineUsers.get(senderId)?.socket;
+    if (artistSocket) {
+      artistSocket.emit("connection_rejected", {
         recipientUsername: socket.data.username,
       });
     }
@@ -171,16 +187,16 @@ io.on("connection", (socket) => {
     const session = sessions.get(sessionId);
     if (!session) return;
 
-    const [socket1, socket2] = session.sockets;
-    const otherSocket = socket1.id === socket.id ? socket2 : socket1;
+    const { artistSocket, viewerSocket } = session;
+    const otherSocket = artistSocket.id === socket.id ? viewerSocket : artistSocket;
 
     // notify the other user that this user left
     otherSocket.emit("partner_left", { sessionId });
 
     // remove both from room and session
     try {
-      socket1.leave(sessionId);
-      socket2.leave(sessionId);
+      artistSocket.leave(sessionId);
+      viewerSocket.leave(sessionId);
     } catch {}
     
     sessions.delete(sessionId);
@@ -189,10 +205,10 @@ io.on("connection", (socket) => {
 
   // user leaves main page (navigates away)
   socket.on("leave_main_page", () => {
-    mainPageUsers.delete(socket.id);
+    availableViewers.delete(socket.id);
     
     // broadcast updated online users list
-    io.emit("online_users", Array.from(mainPageUsers.values()).map(u => ({
+    io.emit("online_users", Array.from(availableViewers.values()).map(u => ({
       socketId: u.socket.id,
       username: u.username,
     })));
@@ -203,21 +219,21 @@ io.on("connection", (socket) => {
   socket.on("disconnect", () => {
     console.log("socket disconnected:", socket.id);
 
-    // remove from online users and main page users
+    // remove from online users and available viewers
     onlineUsers.delete(socket.id);
-    mainPageUsers.delete(socket.id);
+    availableViewers.delete(socket.id);
 
     // remove any pending requests from this user
     pendingRequests.delete(socket.id);
 
     // if in a session, end it
     for (const [sessionId, session] of sessions.entries()) {
-      const [socket1, socket2] = session.sockets;
-      if (socket1.id === socket.id || socket2.id === socket.id) {
+      const { artistSocket, viewerSocket } = session;
+      if (artistSocket.id === socket.id || viewerSocket.id === socket.id) {
         io.to(sessionId).emit("session_ended", { sessionId });
         try {
-          socket1.leave(sessionId);
-          socket2.leave(sessionId);
+          artistSocket.leave(sessionId);
+          viewerSocket.leave(sessionId);
         } catch {}
         sessions.delete(sessionId);
         console.log("session ended (user disconnected):", sessionId);
@@ -226,7 +242,7 @@ io.on("connection", (socket) => {
     }
 
     // broadcast updated online users list
-    io.emit("online_users", Array.from(mainPageUsers.values()).map(u => ({
+    io.emit("online_users", Array.from(availableViewers.values()).map(u => ({
       socketId: u.socket.id,
       username: u.username,
     })));

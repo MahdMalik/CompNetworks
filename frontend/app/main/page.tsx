@@ -18,6 +18,7 @@ type ConnectionRequest = {
 export default function MainPage() {
   const { user, isSignedIn } = useUser();
   const router = useRouter();
+  const [role, setRole] = useState<"artist" | "viewer" | null>(null);
   const [onlineUsers, setOnlineUsers] = useState<OnlineUser[]>([]);
   const [incomingRequest, setIncomingRequest] = useState<ConnectionRequest | null>(null);
   const [targetUsername, setTargetUsername] = useState("");
@@ -28,14 +29,15 @@ export default function MainPage() {
     const socket = socketRef.current;
 
     // join with username on load
-    if (user && isSignedIn) {
+    if (user && isSignedIn && role) {
       const username =
         user.username ??
         user.primaryEmailAddress?.emailAddress ??
         `user-${user.id}`;
 
       sessionStorage.setItem("username", username);
-      socket.emit("join_with_username", username);
+      sessionStorage.setItem("role", role);
+      socket.emit("join_with_username", { username, role });
     }
 
     // receive updated online users list
@@ -51,7 +53,6 @@ export default function MainPage() {
 
     // matched and ready for session
     socket.on("matched", (data: { sessionId: string }) => {
-      sessionStorage.setItem("username", user?.username || "");
       router.push(`/session/${data.sessionId}`);
     });
 
@@ -73,12 +74,12 @@ export default function MainPage() {
       socket.off("connection_rejected");
       socket.off("error_message");
     };
-  }, [router, user, isSignedIn]);
+  }, [router, user, isSignedIn, role]);
 
   const handleSendRequest = () => {
     const targetUser = onlineUsers.find(u => u.username === targetUsername);
     if (!targetUser) {
-      setError("User not found");
+      setError("Artist not found");
       return;
     }
 
@@ -107,55 +108,113 @@ export default function MainPage() {
     return <div>Please sign in.</div>;
   }
 
+  // Role selection screen
+  if (!role) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-gray-100">
+        <div className="p-8 rounded-xl bg-white shadow-lg max-w-md w-full">
+          <h1 className="text-2xl font-bold mb-6">Welcome {user?.username ?? user?.firstName}</h1>
+          <p className="text-gray-600 mb-6">What's your role?</p>
+          
+          <div className="space-y-3">
+            <button
+              className="w-full px-4 py-3 bg-blue-600 text-white rounded hover:bg-blue-700 font-medium"
+              onClick={() => setRole("artist")}
+            >
+              I'm an Artist - Show My Portfolio
+            </button>
+            <button
+              className="w-full px-4 py-3 bg-green-600 text-white rounded hover:bg-green-700 font-medium"
+              onClick={() => setRole("viewer")}
+            >
+              I'm a Viewer - Browse Portfolios
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="flex min-h-screen items-center justify-center bg-gray-100">
       <div className="p-8 rounded-xl bg-white shadow-lg max-w-md w-full">
-        <h1 className="text-2xl font-bold mb-6">
-          Welcome {user?.username ?? user?.firstName}
-        </h1>
+        <div className="flex items-center justify-between mb-6">
+          <h1 className="text-2xl font-bold">
+            Welcome {user?.username ?? user?.firstName}
+          </h1>
+          <button
+            className="text-sm px-3 py-1 bg-gray-200 rounded hover:bg-gray-300"
+            onClick={() => setRole(null)}
+          >
+            Change Role
+          </button>
+        </div>
 
-        {/* Send request section */}
-        <div className="mb-6">
-          <h2 className="text-lg font-semibold mb-3">Connect with someone</h2>
-          <div className="flex gap-2 mb-4">
-            <input
-              type="text"
-              placeholder="Enter username..."
-              value={targetUsername}
-              onChange={(e) => setTargetUsername(e.target.value)}
-              className="flex-1 px-3 py-2 border rounded bg-white"
-              onKeyDown={(e) => e.key === "Enter" && handleSendRequest()}
-            />
-            <button
-              className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
-              onClick={handleSendRequest}
-            >
-              Send
-            </button>
-          </div>
+        <div className="mb-6 p-3 bg-blue-50 rounded">
+          <p className="text-sm font-medium text-blue-900">
+            {role === "artist" ? "🎨 Showing Your Portfolio" : "👁️ Browsing Portfolios"}
+          </p>
+        </div>
 
-          {/* Online users list */}
-          <div className="text-sm text-gray-600 mb-3">
-            <p className="font-medium mb-2">Online users:</p>
-            <div className="space-y-1 max-h-32 overflow-y-auto">
-              {onlineUsers.length > 0 ? (
-                onlineUsers.map((u) => (
-                  <div key={u.socketId} className="text-xs text-gray-500">
-                    {u.username}
-                  </div>
-                ))
-              ) : (
-                <p className="text-xs text-gray-400">None online</p>
-              )}
+        {role === "artist" ? (
+          // Artist view
+          <div className="mb-6">
+            <h2 className="text-lg font-semibold mb-3">Available Viewers</h2>
+            <div className="flex gap-2 mb-4">
+              <input
+                type="text"
+                placeholder="Enter viewer username..."
+                value={targetUsername}
+                onChange={(e) => setTargetUsername(e.target.value)}
+                className="flex-1 px-3 py-2 border rounded bg-white"
+                onKeyDown={(e) => e.key === "Enter" && handleSendRequest()}
+              />
+              <button
+                className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+                onClick={handleSendRequest}
+              >
+                Send
+              </button>
+            </div>
+
+            <div className="text-sm text-gray-600 mb-3">
+              <p className="font-medium mb-2">Online viewers:</p>
+              <div className="space-y-1 max-h-32 overflow-y-auto">
+                {onlineUsers.filter(u => u.username !== user?.username).length > 0 ? (
+                  onlineUsers
+                    .filter(u => u.username !== user?.username)
+                    .map((u) => (
+                      <div key={u.socketId} className="text-xs text-gray-500">
+                        {u.username}
+                      </div>
+                    ))
+                ) : (
+                  <p className="text-xs text-gray-400">No viewers online</p>
+                )}
+              </div>
             </div>
           </div>
-        </div>
+        ) : (
+          // Viewer view
+          <div className="mb-6">
+            <h2 className="text-lg font-semibold mb-3">Available Artists</h2>
+            <p className="text-sm text-gray-600 mb-4">
+              Wait for artists to send you requests, or search for one below.
+            </p>
+            
+            {incomingRequest ? (
+              <p className="text-sm text-gray-500">You have a pending request above</p>
+            ) : (
+              <p className="text-sm text-gray-400">No pending requests</p>
+            )}
+          </div>
+        )}
 
         {/* Incoming request section */}
         {incomingRequest && (
           <div className="mb-6 p-4 border-l-4 border-green-500 bg-green-50 rounded">
             <p className="font-medium mb-3">
-              {incomingRequest.senderUsername} wants to connect
+              {incomingRequest.senderUsername} wants to show you their portfolio
             </p>
             <div className="flex gap-2">
               <button
