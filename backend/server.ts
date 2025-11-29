@@ -35,6 +35,12 @@ const sessions = new Map<
   { artistSocket: Socket; viewerSocket: Socket }
 >();
 
+// track session readiness: { sessionId -> { artistReady: boolean, viewerReady: boolean } }
+const sessionReadiness = new Map<
+  string,
+  { artistReady: boolean; viewerReady: boolean }
+>();
+
 io.on("connection", (socket) => {
   console.log("socket connected:", socket.id);
 
@@ -131,18 +137,12 @@ io.on("connection", (socket) => {
 
     sessions.set(sessionId, { artistSocket, viewerSocket: socket });
 
+    // Initialize readiness tracking
+    sessionReadiness.set(sessionId, { artistReady: false, viewerReady: false });
+
     // notify both
     artistSocket.emit("matched", { sessionId });
     socket.emit("matched", { sessionId });
-
-    // event for session page
-    setTimeout(() => {
-      io.to(room).emit("session_start", {
-        sessionId,
-        artistName: artistSocket.data.username,
-        viewerName: socket.data.username,
-      });
-    }, 400);
 
     console.log(
       `matched ${artistSocket.data.username} (artist) <-> ${socket.data.username} (viewer) in ${sessionId}`
@@ -201,6 +201,49 @@ io.on("connection", (socket) => {
     
     sessions.delete(sessionId);
     console.log("session ended (user left):", sessionId);
+  });
+
+  // client signals they're ready on the session page
+  socket.on("session_page_ready", (sessionId: string) => {
+    const session = sessions.get(sessionId);
+    const readiness = sessionReadiness.get(sessionId);
+    if (!session || !readiness) return;
+
+    const { artistSocket, viewerSocket } = session;
+
+    // Mark which user is ready
+    if (artistSocket.id === socket.id) {
+      readiness.artistReady = true;
+    } else if (viewerSocket.id === socket.id) {
+      readiness.viewerReady = true;
+    }
+
+    // If both are ready, emit session_start
+    if (readiness.artistReady && readiness.viewerReady) {
+      io.to(sessionId).emit("session_start", {
+        sessionId,
+        artistName: artistSocket.data.username,
+        viewerName: viewerSocket.data.username,
+      });
+      console.log("Both clients ready, starting session:", sessionId);
+    }
+  });
+
+  // artist sends selected image to viewer
+  socket.on("send_image", (payload: { sessionId: string; imageUrl: string }) => {
+    const { sessionId, imageUrl } = payload;
+    const session = sessions.get(sessionId);
+    if (!session) return;
+
+    const { artistSocket, viewerSocket } = session;
+    if (artistSocket.id !== socket.id) {
+      socket.emit("error_message", "Only artists can send images");
+      return;
+    }
+
+    // send image to viewer
+    viewerSocket.emit("receive_image", { imageUrl });
+    console.log(`${socket.data.username} sent image to viewer in ${sessionId}`);
   });
 
   // user leaves main page (navigates away)

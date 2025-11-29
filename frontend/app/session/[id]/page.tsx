@@ -13,6 +13,7 @@ export default function SessionPage() {
     const [portfolioImages, setPortfolioImages] = useState<string[]>([]);
     const [selectedImage, setSelectedImage] = useState<string | null>(null);
     const [loadingImages, setLoadingImages] = useState(false);
+    const [viewerImage, setViewerImage] = useState<string | null>(null);
 
     // detect strict mode mount
     const effectRan = useRef(false);
@@ -51,6 +52,9 @@ export default function SessionPage() {
 
         socket.on("rejoined", () => console.log("rejoined session"));
 
+        // Signal that this client is ready to receive session_start
+        socket.emit("session_page_ready", sessionId);
+
         socket.on("session_start", (data: { sessionId: string; artistName: string; viewerName: string }) => {
             if (!username) return;
             
@@ -78,6 +82,11 @@ export default function SessionPage() {
             router.push("/");
         });
 
+        // viewer receives image from artist
+        socket.on("receive_image", (data: { imageUrl: string }) => {
+            setViewerImage(data.imageUrl);
+        });
+
         return () => {
             socket.emit("leave_main_page");
             socket.off("rejoined");
@@ -85,6 +94,7 @@ export default function SessionPage() {
             socket.off("partner_left");
             socket.off("session_ended");
             socket.off("error_message");
+            socket.off("receive_image");
         };
     }, [router, sessionId]);
 
@@ -104,6 +114,13 @@ export default function SessionPage() {
             console.error("Failed to load portfolio images:", error);
         }
         setLoadingImages(false);
+    };
+
+    const handleSelectImage = (imageUrl: string) => {
+        setSelectedImage(imageUrl);
+        // Send image to viewer through socket
+        const socket = getSocket();
+        socket.emit("send_image", { sessionId, imageUrl });
     };
 
     return (
@@ -152,7 +169,7 @@ export default function SessionPage() {
                                                 {portfolioImages.map((image, idx) => (
                                                     <button
                                                         key={idx}
-                                                        onClick={() => setSelectedImage(image)}
+                                                        onClick={() => handleSelectImage(image)}
                                                         className={`flex-shrink-0 w-16 h-16 rounded border-2 overflow-hidden transition-all ${
                                                             selectedImage === image
                                                                 ? "border-blue-500 ring-2 ring-blue-300"
@@ -175,10 +192,14 @@ export default function SessionPage() {
                             <div className="mb-6">
                                 <p className="text-lg mb-4">Viewing portfolio from: <span className="font-bold">{otherUsername}</span></p>
                                 <div className="p-4 bg-gray-100 rounded min-h-[300px] flex items-center justify-center">
-                                    <div className="text-center">
-                                        <p className="text-gray-600 mb-2">🖼️ {otherUsername}'s Portfolio</p>
-                                        <p className="text-sm text-gray-500">(Waiting for images...)</p>
-                                    </div>
+                                    {viewerImage ? (
+                                        <img src={viewerImage} alt="Artist portfolio" className="max-h-[300px] max-w-full object-contain" />
+                                    ) : (
+                                        <div className="text-center">
+                                            <p className="text-gray-600 mb-2">🖼️ {otherUsername}'s Portfolio</p>
+                                            <p className="text-sm text-gray-500">(Waiting for images...)</p>
+                                        </div>
+                                    )}
                                 </div>
                             </div>
                         )}
