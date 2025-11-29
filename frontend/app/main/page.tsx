@@ -23,7 +23,41 @@ export default function MainPage() {
   const [incomingRequest, setIncomingRequest] = useState<ConnectionRequest | null>(null);
   const [targetUsername, setTargetUsername] = useState("");
   const [error, setError] = useState("");
+  const [errorFading, setErrorFading] = useState(false);
+  const [requestSent, setRequestSent] = useState(false);
+  const [requestFading, setRequestFading] = useState(false);
+  const [sendingRequest, setSendingRequest] = useState(false);
   const socketRef = useRef(getSocket());
+
+  // Auto-clear error after 3 seconds with fade
+  useEffect(() => {
+    if (error) {
+      setErrorFading(false);
+      const fadeTimer = setTimeout(() => setErrorFading(true), 2700);
+      const clearTimer = setTimeout(() => {
+        setError("");
+      }, 3000);
+      return () => {
+        clearTimeout(fadeTimer);
+        clearTimeout(clearTimer);
+      };
+    }
+  }, [error]);
+
+  // Auto-clear request after 2 seconds with fade
+  useEffect(() => {
+    if (requestSent) {
+      setRequestFading(false);
+      const fadeTimer = setTimeout(() => setRequestFading(true), 1700);
+      const clearTimer = setTimeout(() => {
+        setRequestSent(false);
+      }, 2000);
+      return () => {
+        clearTimeout(fadeTimer);
+        clearTimeout(clearTimer);
+      };
+    }
+  }, [requestSent]);
 
   useEffect(() => {
     const socket = socketRef.current;
@@ -64,6 +98,7 @@ export default function MainPage() {
     // error message
     socket.on("error_message", (msg: string) => {
       setError(msg);
+      setSendingRequest(false);
     });
 
     return () => {
@@ -86,6 +121,7 @@ export default function MainPage() {
     const socket = socketRef.current;
     socket.emit("send_connection_request", targetUser.socketId);
     setTargetUsername("");
+    setRequestSent(true);
   };
 
   const handleAcceptRequest = () => {
@@ -170,12 +206,19 @@ export default function MainPage() {
                 onKeyDown={(e) => e.key === "Enter" && handleSendRequest()}
               />
               <button
-                className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+                className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:bg-gray-400"
                 onClick={handleSendRequest}
+                disabled={sendingRequest}
               >
                 Send
               </button>
             </div>
+
+            {requestSent && (
+              <div className={`p-3 bg-green-100 text-green-700 rounded mb-3 text-sm transition-opacity duration-300 ${requestFading ? 'opacity-0' : 'opacity-100'}`}>
+                ✓ Request sent! Waiting for response...
+              </div>
+            )}
 
             <div className="text-sm text-gray-600 mb-3">
               <p className="font-medium mb-2">Online viewers:</p>
@@ -235,7 +278,7 @@ export default function MainPage() {
 
         {/* Error message */}
         {error && (
-          <div className="p-3 bg-red-100 text-red-700 rounded mb-4 text-sm">
+          <div className={`p-3 bg-red-100 text-red-700 rounded mb-4 text-sm transition-opacity duration-300 ${errorFading ? 'opacity-0' : 'opacity-100'}`}>
             {error}
           </div>
         )}
