@@ -182,11 +182,7 @@ io.on("connection", (socket) => {
     console.log(`${username} rejoined ${sessionId}`);
   });
 
-  // user explicitly leaves a session
-  socket.on("leave_session", (sessionId: string) => {
-    const session = sessions.get(sessionId);
-    if (!session) return;
-
+  const handleLeaveSession = (session, sessionId) => {
     const { artistSocket, viewerSocket } = session;
     const otherSocket = artistSocket.id === socket.id ? viewerSocket : artistSocket;
 
@@ -201,6 +197,14 @@ io.on("connection", (socket) => {
     
     sessions.delete(sessionId);
     console.log("session ended (user left):", sessionId);
+
+  }
+
+  // user explicitly leaves a session
+  socket.on("leave_session", (sessionId: string) => {
+    const session = sessions.get(sessionId);
+    if (!session) return;
+    handleLeaveSession(session, sessionId)
   });
 
   // client signals they're ready on the session page
@@ -271,17 +275,7 @@ io.on("connection", (socket) => {
 
     // if in a session, end it
     for (const [sessionId, session] of sessions.entries()) {
-      const { artistSocket, viewerSocket } = session;
-      if (artistSocket.id === socket.id || viewerSocket.id === socket.id) {
-        io.to(sessionId).emit("session_ended", { sessionId });
-        try {
-          artistSocket.leave(sessionId);
-          viewerSocket.leave(sessionId);
-        } catch {}
-        sessions.delete(sessionId);
-        console.log("session ended (user disconnected):", sessionId);
-        break;
-      }
+      handleLeaveSession(session, sessionId)
     }
 
     // broadcast updated online users list
