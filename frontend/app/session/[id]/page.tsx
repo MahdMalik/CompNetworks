@@ -8,6 +8,7 @@ export default function SessionPage() {
     const router = useRouter();
     const params = useParams();
     const sessionId = params?.id || "";
+    const svgRef = useRef<SVGSVGElement>(null);
     const [role, setRole] = useState<"artist" | "viewer" | null>(null);
     const [otherUsername, setOtherUsername] = useState<string | null>(null);
     const [portfolioImages, setPortfolioImages] = useState<string[]>([]);
@@ -17,6 +18,71 @@ export default function SessionPage() {
 
     // detect strict mode mount
     const effectRan = useRef(false);
+
+    // Initialize particle animation
+    useEffect(() => {
+        const el = svgRef.current;
+        if (!el) return;
+
+        const particles: Array<{ x: number; y: number; vx: number; vy: number }> = [];
+        const particleCount = 120;
+        
+        for (let i = 0; i < particleCount; i++) {
+          particles.push({
+            x: Math.random() * el.clientWidth,
+            y: Math.random() * el.clientHeight,
+            vx: (Math.random() - 0.5) * 2,
+            vy: (Math.random() - 0.5) * 2,
+          });
+        }
+
+        const animate = () => {
+          const svg = el;
+          svg.innerHTML = '';
+          
+          particles.forEach((p, i) => {
+            p.x += p.vx;
+            p.y += p.vy;
+            
+            if (p.x < 0) p.x = svg.clientWidth;
+            if (p.x > svg.clientWidth) p.x = 0;
+            if (p.y < 0) p.y = svg.clientHeight;
+            if (p.y > svg.clientHeight) p.y = 0;
+
+            particles.forEach((p2, j) => {
+              if (i !== j) {
+                const dx = p2.x - p.x;
+                const dy = p2.y - p.y;
+                const dist = Math.sqrt(dx * dx + dy * dy);
+                
+                if (dist < 120) {
+                  const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+                  line.setAttribute('x1', String(p.x));
+                  line.setAttribute('y1', String(p.y));
+                  line.setAttribute('x2', String(p2.x));
+                  line.setAttribute('y2', String(p2.y));
+                  line.setAttribute('stroke', '#c084fc');
+                  line.setAttribute('stroke-opacity', String((1 - dist / 120) * 0.3));
+                  line.setAttribute('stroke-width', '0.5');
+                  svg.appendChild(line);
+                }
+              }
+            });
+
+            const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+            circle.setAttribute('cx', String(p.x));
+            circle.setAttribute('cy', String(p.y));
+            circle.setAttribute('r', '3');
+            circle.setAttribute('fill', '#ef4444');
+            circle.setAttribute('opacity', '0.7');
+            svg.appendChild(circle);
+          });
+
+          requestAnimationFrame(animate);
+        };
+
+        animate();
+    }, []);
 
     useEffect(() => {
         // In dev mode, skip first mount (React StrictMode)
@@ -124,97 +190,101 @@ export default function SessionPage() {
     };
 
     return (
-        <main className="flex min-h-screen items-center justify-center p-8">
-            <div className="w-full max-w-lg text-center">
-                <h1 className="text-2xl font-bold mb-4">Session: {sessionId}</h1>
+        <main className="flex min-h-screen items-center justify-center p-8 font-sans relative overflow-hidden bg-gradient-to-br from-purple-950 via-slate-950 to-purple-900">
+            <svg className="absolute inset-0 w-full h-full z-0 pointer-events-none" ref={svgRef} />
+            
+            <div className="relative z-10 w-full max-w-2xl">
+                <div className="rounded-xl bg-white dark:bg-slate-900 shadow-2xl dark:shadow-xl border-2 border-purple-300 dark:border-purple-700 transition-all duration-300 hover:scale-105 hover:[box-shadow:0_0_50px_rgba(239,68,68,0.5)] p-8">
+                    <h1 className="text-3xl font-bold mb-6 bg-gradient-to-r from-purple-700 to-red-600 bg-clip-text text-transparent">Session: {sessionId}</h1>
 
-                {role && (
-                    <div className="mb-4 p-3 bg-blue-50 rounded">
-                        <p className="text-sm font-medium text-blue-900">
-                            {role === "artist" ? "🎨 You're Showing Your Portfolio" : "👁️ You're Viewing a Portfolio"}
-                        </p>
-                    </div>
-                )}
+                    {role && (
+                        <div className="mb-6 p-4 bg-gradient-to-r from-purple-50 to-purple-100 dark:from-purple-950/40 dark:to-purple-900/40 rounded-lg border border-purple-200 dark:border-purple-800">
+                            <p className="text-sm font-medium text-purple-900 dark:text-purple-100">
+                                {role === "artist" ? "🎨 You're Showing Your Portfolio" : "👁️ You're Viewing a Portfolio"}
+                            </p>
+                        </div>
+                    )}
 
-                {otherUsername ? (
-                    <>
-                        {role === "artist" ? (
-                            <div className="mb-6">
-                                <p className="text-lg mb-4">Showing portfolio to: <span className="font-bold">{otherUsername}</span></p>
-                                <div className="p-4 bg-gray-100 rounded min-h-[300px] flex items-center justify-center mb-4">
-                                    {selectedImage ? (
-                                        <img src={selectedImage} alt="Selected portfolio" className="max-h-[300px] max-w-full object-contain" />
-                                    ) : (
-                                        <div className="text-center">
-                                            <p className="text-gray-600 mb-2">📸 Your Portfolio</p>
-                                            <p className="text-sm text-gray-500">(Select an image below)</p>
-                                        </div>
-                                    )}
-                                </div>
-
-                                {/* Portfolio Images Sidebar */}
-                                <div className="bg-gray-50 rounded p-3 border">
-                                    {portfolioImages.length === 0 ? (
-                                        <button
-                                            className="w-full px-3 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 text-sm font-medium disabled:bg-gray-400"
-                                            onClick={handleGetImages}
-                                            disabled={loadingImages}
-                                        >
-                                            {loadingImages ? "Loading..." : "Get Images"}
-                                        </button>
-                                    ) : (
-                                        <>
-                                            <p className="text-xs font-medium text-gray-700 mb-2">Portfolio Images:</p>
-                                            <div className="flex gap-2 overflow-x-auto pb-2">
-                                                {portfolioImages.map((image, idx) => (
-                                                    <button
-                                                        key={idx}
-                                                        onClick={() => handleSelectImage(image)}
-                                                        className={`flex-shrink-0 w-16 h-16 rounded border-2 overflow-hidden transition-all ${
-                                                            selectedImage === image
-                                                                ? "border-blue-500 ring-2 ring-blue-300"
-                                                                : "border-gray-300 hover:border-gray-400"
-                                                        }`}
-                                                    >
-                                                        <img
-                                                            src={image}
-                                                            alt={`Portfolio ${idx}`}
-                                                            className="w-full h-full object-cover"
-                                                        />
-                                                    </button>
-                                                ))}
+                    {otherUsername ? (
+                        <>
+                            {role === "artist" ? (
+                                <div className="mb-6">
+                                    <p className="text-lg mb-4 text-gray-900 dark:text-white">Showing portfolio to: <span className="font-bold bg-gradient-to-r from-purple-600 to-red-600 bg-clip-text text-transparent">{otherUsername}</span></p>
+                                    <div className="p-6 bg-gradient-to-br from-purple-50 to-purple-100 dark:from-purple-950/40 dark:to-purple-900/40 rounded-lg min-h-[300px] flex items-center justify-center mb-6 border-2 border-purple-200 dark:border-purple-800">
+                                        {selectedImage ? (
+                                            <img src={selectedImage} alt="Selected portfolio" className="max-h-[300px] max-w-full object-contain rounded-lg shadow-lg" />
+                                        ) : (
+                                            <div className="text-center">
+                                                <p className="text-gray-600 dark:text-gray-300 mb-2 text-lg">📸 Your Portfolio</p>
+                                                <p className="text-sm text-gray-500 dark:text-gray-400">(Select an image below)</p>
                                             </div>
-                                        </>
-                                    )}
-                                </div>
-                            </div>
-                        ) : (
-                            <div className="mb-6">
-                                <p className="text-lg mb-4">Viewing portfolio from: <span className="font-bold">{otherUsername}</span></p>
-                                <div className="p-4 bg-gray-100 rounded min-h-[300px] flex items-center justify-center">
-                                    {viewerImage ? (
-                                        <img src={viewerImage} alt="Artist portfolio" className="max-h-[300px] max-w-full object-contain" />
-                                    ) : (
-                                        <div className="text-center">
-                                            <p className="text-gray-600 mb-2">🖼️ {otherUsername}'s Portfolio</p>
-                                            <p className="text-sm text-gray-500">(Waiting for images...)</p>
-                                        </div>
-                                    )}
-                                </div>
-                            </div>
-                        )}
-                    </>
-                ) : (
-                    <p>Waiting to connect...</p>
-                )}
+                                        )}
+                                    </div>
 
-                <div className="mt-6">
-                    <button
-                        className="px-4 py-2 bg-gray-300 rounded hover:bg-gray-400"
-                        onClick={handleLeave}
-                    >
-                        Leave Session
-                    </button>
+                                    {/* Portfolio Images Sidebar */}
+                                    <div className="bg-gradient-to-br from-purple-50 to-purple-100 dark:from-purple-950/40 dark:to-purple-900/40 rounded-lg p-4 border-2 border-purple-200 dark:border-purple-800">
+                                        {portfolioImages.length === 0 ? (
+                                            <button
+                                                className="w-full px-4 py-3 bg-gradient-to-r from-purple-600 to-purple-700 text-white rounded-lg hover:shadow-lg hover:shadow-purple-500/50 text-sm font-medium disabled:bg-gray-400 transition-all"
+                                                onClick={handleGetImages}
+                                                disabled={loadingImages}
+                                            >
+                                                {loadingImages ? "Loading..." : "Get Images"}
+                                            </button>
+                                        ) : (
+                                            <>
+                                                <p className="text-xs font-medium text-gray-700 dark:text-gray-300 mb-3">Portfolio Images:</p>
+                                                <div className="flex gap-3 overflow-x-auto pb-2">
+                                                    {portfolioImages.map((image, idx) => (
+                                                        <button
+                                                            key={idx}
+                                                            onClick={() => handleSelectImage(image)}
+                                                            className={`flex-shrink-0 w-20 h-20 rounded-lg border-2 overflow-hidden transition-all ${
+                                                                selectedImage === image
+                                                                    ? "border-red-500 ring-2 ring-red-300 dark:ring-red-700 shadow-lg"
+                                                                    : "border-purple-300 dark:border-purple-700 hover:border-purple-400 dark:hover:border-purple-600"
+                                                            }`}
+                                                        >
+                                                            <img
+                                                                src={image}
+                                                                alt={`Portfolio ${idx}`}
+                                                                className="w-full h-full object-cover"
+                                                            />
+                                                        </button>
+                                                    ))}
+                                                </div>
+                                            </>
+                                        )}
+                                    </div>
+                                </div>
+                            ) : (
+                                <div className="mb-6">
+                                    <p className="text-lg mb-4 text-gray-900 dark:text-white">Viewing portfolio from: <span className="font-bold bg-gradient-to-r from-purple-600 to-red-600 bg-clip-text text-transparent">{otherUsername}</span></p>
+                                    <div className="p-6 bg-gradient-to-br from-purple-50 to-purple-100 dark:from-purple-950/40 dark:to-purple-900/40 rounded-lg min-h-[300px] flex items-center justify-center border-2 border-purple-200 dark:border-purple-800">
+                                        {viewerImage ? (
+                                            <img src={viewerImage} alt="Artist portfolio" className="max-h-[300px] max-w-full object-contain rounded-lg shadow-lg" />
+                                        ) : (
+                                            <div className="text-center">
+                                                <p className="text-gray-600 dark:text-gray-300 mb-2 text-lg">🖼️ {otherUsername}'s Portfolio</p>
+                                                <p className="text-sm text-gray-500 dark:text-gray-400">(Waiting for images...)</p>
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            )}
+                        </>
+                    ) : (
+                        <p className="text-center text-gray-600 dark:text-gray-300 py-8">Waiting to connect...</p>
+                    )}
+
+                    <div className="mt-8 flex justify-center">
+                        <button
+                            className="px-6 py-3 bg-gradient-to-r from-red-600 to-red-700 text-white rounded-lg hover:shadow-lg hover:shadow-red-500/50 font-medium transition-all"
+                            onClick={handleLeave}
+                        >
+                            Leave Session
+                        </button>
+                    </div>
                 </div>
             </div>
         </main>
