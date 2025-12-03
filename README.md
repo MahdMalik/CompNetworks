@@ -35,6 +35,12 @@ To enable Clerk locally:
 npm install
 ```
 
+Also install this:
+```
+npm install express ssh2-sftp-client @types/express --save
+npm run dev
+```
+
 2. Create a `.env.local` file in the project root with these variables (values from your Clerk dashboard):
 
 ```text
