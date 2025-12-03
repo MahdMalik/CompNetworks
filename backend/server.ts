@@ -3,7 +3,7 @@ import express from "express";
 import http from "http";
 import { Server as IOServer, Socket } from "socket.io";
 import { randomBytes } from "crypto";
-import { readdirSync, readFileSync } from "fs";
+import SFTPClient from "ssh2-sftp-client";
 import { join } from "path";
 
 const app = express();
@@ -12,7 +12,7 @@ const io = new IOServer(server, {
   cors: { origin: "*" }, // restrict for production
 });
 
-// Serve static files from public directory
+// Serve static files from public directory (for any local assets)
 app.use(express.static(join(process.cwd(), "public")));
 
 type User = {
@@ -24,8 +24,7 @@ type User = {
 // track online users: { socketId -> User }
 const onlineUsers = new Map<string, User>();
 
-// track users on main page: { socketId -> User }
-// Artists can see all viewers, viewers don't see anyone
+// track users on main page (artists see viewers): { socketId -> User }
 const availableViewers = new Map<string, User>();
 
 // track pending requests: { recipientSocketId -> { senderId, senderUsername, senderRole } }
@@ -49,27 +48,42 @@ const sessionReadiness = new Map<
 io.on("connection", (socket) => {
   console.log("socket connected:", socket.id);
 
-  socket.on("join_with_username", (data: { username: string; role: "artist" | "viewer" }) => {
-    // sanitize / validate username in real app
-    socket.data.username = data.username;
-    socket.data.role = data.role;
+  // user joins with username + role
+  socket.on(
+    "join_with_username",
+    (data: { username: string; role: "artist" | "viewer" }) => {
+      // sanitize / validate username in real app
+      socket.data.username = data.username;
+      socket.data.role = data.role;
 
-    onlineUsers.set(socket.id, { socket, username: data.username, role: data.role });
-    
-    // track viewers that are available to receive requests
-    if (data.role === "viewer") {
-      availableViewers.set(socket.id, { socket, username: data.username, role: "viewer" });
+      onlineUsers.set(socket.id, {
+        socket,
+        username: data.username,
+        role: data.role,
+      });
+
+      // track viewers that are available to receive requests
+      if (data.role === "viewer") {
+        availableViewers.set(socket.id, {
+          socket,
+          username: data.username,
+          role: "viewer",
+        });
+      }
+
+      // broadcast updated available viewers list (for artists to see)
+      io.emit(
+        "online_users",
+        Array.from(availableViewers.values()).map((u) => ({
+          socketId: u.socket.id,
+          username: u.username,
+        }))
+      );
+
+      socket.emit("ready", { socketId: socket.id });
+      console.log("user online:", data.username, "as", data.role);
     }
-
-    // broadcast updated available viewers list (for artists to see)
-    io.emit("online_users", Array.from(availableViewers.values()).map(u => ({
-      socketId: u.socket.id,
-      username: u.username,
-    })));
-
-    socket.emit("ready", { socketId: socket.id });
-    console.log("user online:", data.username, "as", data.role);
-  });
+  );
 
   // user requests to connect with another user (artist sends request to viewer)
   socket.on("send_connection_request", (recipientSocketId: string) => {
@@ -112,7 +126,9 @@ io.on("connection", (socket) => {
       senderRole: "artist",
     });
 
-    console.log(`connection request: ${socket.data.username} (artist) -> ${recipient.username}`);
+    console.log(
+      `connection request: ${socket.data.username} (artist) -> ${recipient.username}`
+    );
   });
 
   // recipient accepts the request
@@ -143,7 +159,10 @@ io.on("connection", (socket) => {
     sessions.set(sessionId, { artistSocket, viewerSocket: socket });
 
     // Initialize readiness tracking
-    sessionReadiness.set(sessionId, { artistReady: false, viewerReady: false });
+    sessionReadiness.set(sessionId, {
+      artistReady: false,
+      viewerReady: false,
+    });
 
     // notify both
     artistSocket.emit("matched", { sessionId });
@@ -170,26 +189,38 @@ io.on("connection", (socket) => {
     }
 
     pendingRequests.delete(socket.id);
-    console.log(`connection rejected: ${socket.data.username} rejected ${request.senderUsername}`);
+    console.log(
+      `connection rejected: ${socket.data.username} rejected ${request.senderUsername}`
+    );
   });
 
   // clients that navigated and need to rejoin (safety)
-  socket.on("rejoin_session", (payload: { sessionId: string; username: string }) => {
-    const { sessionId, username } = payload;
-    const s = sessions.get(sessionId);
-    if (!s) {
-      socket.emit("error_message", "Session not found or already ended");
-      return;
+  socket.on(
+    "rejoin_session",
+    (payload: { sessionId: string; username: string }) => {
+      const { sessionId, username } = payload;
+      const s = sessions.get(sessionId);
+      if (!s) {
+        socket.emit(
+          "error_message",
+          "Session not found or already ended"
+        );
+        return;
+      }
+      socket.join(sessionId);
+      socket.data.username = username;
+      socket.emit("rejoined", { sessionId });
+      console.log(`${username} rejoined ${sessionId}`);
     }
-    socket.join(sessionId);
-    socket.data.username = username;
-    socket.emit("rejoined", { sessionId });
-    console.log(`${username} rejoined ${sessionId}`);
-  });
+  );
 
-  const handleLeaveSession = (session, sessionId) => {
+  const handleLeaveSession = (sessionId: string, leaverSocket: Socket) => {
+    const session = sessions.get(sessionId);
+    if (!session) return;
+
     const { artistSocket, viewerSocket } = session;
-    const otherSocket = artistSocket.id === socket.id ? viewerSocket : artistSocket;
+    const otherSocket =
+      artistSocket.id === leaverSocket.id ? viewerSocket : artistSocket;
 
     // notify the other user that this user left
     otherSocket.emit("partner_left", { sessionId });
@@ -199,16 +230,14 @@ io.on("connection", (socket) => {
       artistSocket.leave(sessionId);
       viewerSocket.leave(sessionId);
     } catch {}
-    
+
     sessions.delete(sessionId);
     console.log("session ended (user left):", sessionId);
-  }
+  };
 
   // user explicitly leaves a session
   socket.on("leave_session", (sessionId: string) => {
-    const session = sessions.get(sessionId);
-    if (!session) return;
-    handleLeaveSession(session, sessionId)
+    handleLeaveSession(sessionId, socket);
   });
 
   // client signals they're ready on the session page
@@ -237,7 +266,7 @@ io.on("connection", (socket) => {
     }
   });
 
-  // artist sends selected image to viewer
+  // artist sends selected image to viewer (by URL handled on frontend)
   socket.on("send_image", (payload: { sessionId: string; imageUrl: string }) => {
     const { sessionId, imageUrl } = payload;
     const session = sessions.get(sessionId);
@@ -251,80 +280,115 @@ io.on("connection", (socket) => {
 
     // send image to viewer
     viewerSocket.emit("receive_image", { imageUrl });
-    console.log(`${socket.data.username} sent image to viewer in ${sessionId}`);
+    console.log(
+      `${socket.data.username} sent image to viewer in ${sessionId}`
+    );
   });
 
-  // request portfolio images from the server
-  socket.on("request_portfolio_images", (payload: {
-    ipAddress: string;
-    username: string;
-    password: string;
-    directoryPath: string;
-  }, callback: (images: Array<{ filename: string; data: string; mimeType: string }>) => void) => {
-    try {
+  // request portfolio images from a remote machine via SSH/SFTP
+  socket.on(
+    "request_portfolio_images",
+    async (
+      payload: {
+        ipAddress: string;
+        username: string;
+        password: string;
+        directoryPath: string;
+      },
+      callback: (
+        images: Array<{ filename: string; data: string; mimeType: string }>
+      ) => void
+    ) => {
       const { ipAddress, username, password, directoryPath } = payload;
-      
-      // TODO: Use ipAddress, username, password for authentication/connection
-      console.log(`Fetching images from - IP: ${ipAddress}, User: ${username}, Dir: ${directoryPath}`);
-      
-      let portfolioDir: string;
-      
-      // If directoryPath is absolute, use it; otherwise join with public
-      if (directoryPath.startsWith('/')) {
-        portfolioDir = directoryPath;
-      } else {
-        portfolioDir = join(process.cwd(), "public", directoryPath);
-      }
-      
-      console.log(`Reading from: ${portfolioDir}`);
-      const files = readdirSync(portfolioDir);
 
-      // Filter for image files only
-      const imageExtensions = [".jpg", ".jpeg", ".png", ".gif", ".webp"];
-      const images = files
-        .filter(file => imageExtensions.some(ext => file.toLowerCase().endsWith(ext)))
-        .map(file => {
-          const filePath = join(portfolioDir, file);
-          const fileBuffer = readFileSync(filePath);
-          const base64Data = fileBuffer.toString('base64');
-          
-          // Determine MIME type
-          const ext = file.toLowerCase().split('.').pop();
-          const mimeTypes: { [key: string]: string } = {
-            jpg: 'image/jpeg',
-            jpeg: 'image/jpeg',
-            png: 'image/png',
-            gif: 'image/gif',
-            webp: 'image/webp'
-          };
-          const mimeType = mimeTypes[ext || ''] || 'image/jpeg';
-          
-          return {
-            filename: file,
-            data: base64Data,
-            mimeType
-          };
+      console.log(
+        `Fetching images over SFTP - IP: ${ipAddress}, User: ${username}, Dir: ${directoryPath}`
+      );
+
+      const sftp = new SFTPClient();
+
+      try {
+        // 1) connect to the user's machine
+        await sftp.connect({
+          host: ipAddress,
+          port: 22, // adjust if you ever need a non-default SSH port
+          username,
+          password,
         });
 
-      console.log(`Found ${images.length} images`);
-      callback(images);
-      console.log(`Sent ${images.length} portfolio images to ${socket.data.username}`);
-    } catch (error) {
-      console.error("Error reading portfolio directory:", error);
-      callback([]);
+        // 2) list files in the given directory (non-recursive)
+        const entries = await sftp.list(directoryPath);
+        const imageExtensions = [".jpg", ".jpeg", ".png", ".gif", ".webp"];
+
+        const images: Array<{
+          filename: string;
+          data: string;
+          mimeType: string;
+        }> = [];
+
+        for (const entry of entries) {
+          // only regular files (type "-" in ssh2-sftp-client)
+          if (entry.type !== "-") continue;
+
+          const lowerName = entry.name.toLowerCase();
+          if (!imageExtensions.some((ext) => lowerName.endsWith(ext))) continue;
+
+          const baseDir = directoryPath.replace(/\/$/, "");
+          const remotePath = `${baseDir}/${entry.name}`;
+
+          // 3) fetch file as Buffer
+          const fileBuffer = (await sftp.get(remotePath)) as Buffer;
+          const base64Data = fileBuffer.toString("base64");
+
+          // 4) infer MIME type from extension
+          const ext = lowerName.split(".").pop() || "";
+          const mimeTypes: { [key: string]: string } = {
+            jpg: "image/jpeg",
+            jpeg: "image/jpeg",
+            png: "image/png",
+            gif: "image/gif",
+            webp: "image/webp",
+          };
+          const mimeType = mimeTypes[ext] || "image/jpeg";
+
+          images.push({
+            filename: entry.name,
+            data: base64Data,
+            mimeType,
+          });
+        }
+
+        console.log(`Found ${images.length} remote images`);
+        callback(images);
+        console.log(
+          `Sent ${images.length} portfolio images to ${socket.data.username}`
+        );
+      } catch (error) {
+        console.error("Error fetching portfolio images over SFTP:", error);
+        callback([]);
+      } finally {
+        try {
+          await sftp.end();
+        } catch {
+          // ignore
+        }
+      }
     }
-  });
+  );
 
   // user leaves main page (navigates away)
   socket.on("leave_main_page", () => {
     availableViewers.delete(socket.id);
-    
+
     // broadcast updated online users list
-    io.emit("online_users", Array.from(availableViewers.values()).map(u => ({
-      socketId: u.socket.id,
-      username: u.username,
-    })));
-    
+    io.emit(
+      "online_users",
+      Array.from(availableViewers.values()).map((u) => ({
+        socketId: u.socket.id,
+        username: u.username,
+      }))
+    );
+
     console.log("user left main page:", socket.data.username);
   });
 
@@ -340,16 +404,31 @@ io.on("connection", (socket) => {
 
     // if in a session, end it
     for (const [sessionId, session] of sessions.entries()) {
-      handleLeaveSession(session, sessionId)
+      const { artistSocket, viewerSocket } = session;
+      if (artistSocket.id === socket.id || viewerSocket.id === socket.id) {
+        io.to(sessionId).emit("session_ended", { sessionId });
+        try {
+          artistSocket.leave(sessionId);
+          viewerSocket.leave(sessionId);
+        } catch {}
+        sessions.delete(sessionId);
+        console.log("session ended (user disconnected):", sessionId);
+        break;
+      }
     }
 
     // broadcast updated online users list
-    io.emit("online_users", Array.from(availableViewers.values()).map(u => ({
-      socketId: u.socket.id,
-      username: u.username,
-    })));
+    io.emit(
+      "online_users",
+      Array.from(availableViewers.values()).map((u) => ({
+        socketId: u.socket.id,
+        username: u.username,
+      }))
+    );
   });
 });
 
 const PORT = Number(process.env.PS_PORT || process.env.PORT || 3001);
-server.listen(PORT, () => console.log(`Socket server listening on ${PORT}`));
+server.listen(PORT, () =>
+  console.log(`Socket server listening on ${PORT}`)
+);
