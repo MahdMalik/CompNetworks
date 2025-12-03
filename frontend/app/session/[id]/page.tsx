@@ -11,10 +11,14 @@ export default function SessionPage() {
     const svgRef = useRef<SVGSVGElement>(null);
     const [role, setRole] = useState<"artist" | "viewer" | null>(null);
     const [otherUsername, setOtherUsername] = useState<string | null>(null);
-    const [portfolioImages, setPortfolioImages] = useState<string[]>([]);
+    const [portfolioImages, setPortfolioImages] = useState<Array<{ filename: string; data: string; mimeType: string }>>([]);
     const [selectedImage, setSelectedImage] = useState<string | null>(null);
     const [loadingImages, setLoadingImages] = useState(false);
     const [viewerImage, setViewerImage] = useState<string | null>(null);
+    const [ipAddress, setIpAddress] = useState("");
+    const [portUsername, setPortUsername] = useState("");
+    const [portPassword, setPortPassword] = useState("");
+    const [directoryPath, setDirectoryPath] = useState("");
 
     // detect strict mode mount
     const effectRan = useRef(false);
@@ -172,21 +176,26 @@ export default function SessionPage() {
 
     const handleGetImages = async () => {
         setLoadingImages(true);
-        try {
-            const response = await fetch("/api/portfolio-images");
-            const data = await response.json();
-            setPortfolioImages(data.images || []);
-        } catch (error) {
-            console.error("Failed to load portfolio images:", error);
-        }
-        setLoadingImages(false);
+        const socket = getSocket();
+        
+        socket.emit("request_portfolio_images", {
+            ipAddress,
+            username: portUsername,
+            password: portPassword,
+            directoryPath,
+        }, (images: Array<{ filename: string; data: string; mimeType: string }>) => {
+            console.log("Received images:", images);
+            setPortfolioImages(images);
+            setLoadingImages(false);
+        });
     };
 
-    const handleSelectImage = (imageUrl: string) => {
-        setSelectedImage(imageUrl);
+    const handleSelectImage = (imageData: { filename: string; data: string; mimeType: string }) => {
+        const dataUrl = `data:${imageData.mimeType};base64,${imageData.data}`;
+        setSelectedImage(dataUrl);
         // Send image to viewer through socket
         const socket = getSocket();
-        socket.emit("send_image", { sessionId, imageUrl });
+        socket.emit("send_image", { sessionId, imageUrl: dataUrl });
     };
 
     return (
@@ -224,13 +233,43 @@ export default function SessionPage() {
                                     {/* Portfolio Images Sidebar */}
                                     <div className="bg-gradient-to-br from-purple-50 to-purple-100 dark:from-purple-950/40 dark:to-purple-900/40 rounded-lg p-4 border-2 border-purple-200 dark:border-purple-800">
                                         {portfolioImages.length === 0 ? (
-                                            <button
-                                                className="w-full px-4 py-3 bg-gradient-to-r from-purple-600 to-purple-700 text-white rounded-lg hover:shadow-lg hover:shadow-purple-500/50 text-sm font-medium disabled:bg-gray-400 transition-all"
-                                                onClick={handleGetImages}
-                                                disabled={loadingImages}
-                                            >
-                                                {loadingImages ? "Loading..." : "Get Images"}
-                                            </button>
+                                            <div className="space-y-3">
+                                                <input
+                                                    type="text"
+                                                    placeholder="IP Address"
+                                                    value={ipAddress}
+                                                    onChange={(e) => setIpAddress(e.target.value)}
+                                                    className="w-full px-3 py-2 text-sm border border-purple-300 dark:border-purple-700 rounded-lg bg-white dark:bg-slate-800 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400"
+                                                />
+                                                <input
+                                                    type="text"
+                                                    placeholder="Username"
+                                                    value={portUsername}
+                                                    onChange={(e) => setPortUsername(e.target.value)}
+                                                    className="w-full px-3 py-2 text-sm border border-purple-300 dark:border-purple-700 rounded-lg bg-white dark:bg-slate-800 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400"
+                                                />
+                                                <input
+                                                    type="password"
+                                                    placeholder="Password"
+                                                    value={portPassword}
+                                                    onChange={(e) => setPortPassword(e.target.value)}
+                                                    className="w-full px-3 py-2 text-sm border border-purple-300 dark:border-purple-700 rounded-lg bg-white dark:bg-slate-800 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400"
+                                                />
+                                                <input
+                                                    type="text"
+                                                    placeholder="Directory Path"
+                                                    value={directoryPath}
+                                                    onChange={(e) => setDirectoryPath(e.target.value)}
+                                                    className="w-full px-3 py-2 text-sm border border-purple-300 dark:border-purple-700 rounded-lg bg-white dark:bg-slate-800 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400"
+                                                />
+                                                <button
+                                                    className="w-full px-4 py-3 bg-gradient-to-r from-purple-600 to-purple-700 text-white rounded-lg hover:shadow-lg hover:shadow-purple-500/50 text-sm font-medium disabled:bg-gray-400 transition-all"
+                                                    onClick={handleGetImages}
+                                                    disabled={loadingImages || !ipAddress || !portUsername || !portPassword || !directoryPath}
+                                                >
+                                                    {loadingImages ? "Loading..." : "Get Images"}
+                                                </button>
+                                            </div>
                                         ) : (
                                             <>
                                                 <p className="text-xs font-medium text-gray-700 dark:text-gray-300 mb-3">Portfolio Images:</p>
@@ -240,13 +279,13 @@ export default function SessionPage() {
                                                             key={idx}
                                                             onClick={() => handleSelectImage(image)}
                                                             className={`flex-shrink-0 w-20 h-20 rounded-lg border-2 overflow-hidden transition-all ${
-                                                                selectedImage === image
+                                                                selectedImage === `data:${image.mimeType};base64,${image.data}`
                                                                     ? "border-red-500 ring-2 ring-red-300 dark:ring-red-700 shadow-lg"
                                                                     : "border-purple-300 dark:border-purple-700 hover:border-purple-400 dark:hover:border-purple-600"
                                                             }`}
                                                         >
                                                             <img
-                                                                src={image}
+                                                                src={`data:${image.mimeType};base64,${image.data}`}
                                                                 alt={`Portfolio ${idx}`}
                                                                 className="w-full h-full object-cover"
                                                             />

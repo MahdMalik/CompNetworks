@@ -3,12 +3,17 @@ import express from "express";
 import http from "http";
 import { Server as IOServer, Socket } from "socket.io";
 import { randomBytes } from "crypto";
+import { readdirSync, readFileSync } from "fs";
+import { join } from "path";
 
 const app = express();
 const server = http.createServer(app);
 const io = new IOServer(server, {
   cors: { origin: "*" }, // restrict for production
 });
+
+// Serve static files from public directory
+app.use(express.static(join(process.cwd(), "public")));
 
 type User = {
   socket: Socket;
@@ -197,7 +202,6 @@ io.on("connection", (socket) => {
     
     sessions.delete(sessionId);
     console.log("session ended (user left):", sessionId);
-
   }
 
   // user explicitly leaves a session
@@ -248,6 +252,67 @@ io.on("connection", (socket) => {
     // send image to viewer
     viewerSocket.emit("receive_image", { imageUrl });
     console.log(`${socket.data.username} sent image to viewer in ${sessionId}`);
+  });
+
+  // request portfolio images from the server
+  socket.on("request_portfolio_images", (payload: {
+    ipAddress: string;
+    username: string;
+    password: string;
+    directoryPath: string;
+  }, callback: (images: Array<{ filename: string; data: string; mimeType: string }>) => void) => {
+    try {
+      const { ipAddress, username, password, directoryPath } = payload;
+      
+      // TODO: Use ipAddress, username, password for authentication/connection
+      console.log(`Fetching images from - IP: ${ipAddress}, User: ${username}, Dir: ${directoryPath}`);
+      
+      let portfolioDir: string;
+      
+      // If directoryPath is absolute, use it; otherwise join with public
+      if (directoryPath.startsWith('/')) {
+        portfolioDir = directoryPath;
+      } else {
+        portfolioDir = join(process.cwd(), "public", directoryPath);
+      }
+      
+      console.log(`Reading from: ${portfolioDir}`);
+      const files = readdirSync(portfolioDir);
+
+      // Filter for image files only
+      const imageExtensions = [".jpg", ".jpeg", ".png", ".gif", ".webp"];
+      const images = files
+        .filter(file => imageExtensions.some(ext => file.toLowerCase().endsWith(ext)))
+        .map(file => {
+          const filePath = join(portfolioDir, file);
+          const fileBuffer = readFileSync(filePath);
+          const base64Data = fileBuffer.toString('base64');
+          
+          // Determine MIME type
+          const ext = file.toLowerCase().split('.').pop();
+          const mimeTypes: { [key: string]: string } = {
+            jpg: 'image/jpeg',
+            jpeg: 'image/jpeg',
+            png: 'image/png',
+            gif: 'image/gif',
+            webp: 'image/webp'
+          };
+          const mimeType = mimeTypes[ext || ''] || 'image/jpeg';
+          
+          return {
+            filename: file,
+            data: base64Data,
+            mimeType
+          };
+        });
+
+      console.log(`Found ${images.length} images`);
+      callback(images);
+      console.log(`Sent ${images.length} portfolio images to ${socket.data.username}`);
+    } catch (error) {
+      console.error("Error reading portfolio directory:", error);
+      callback([]);
+    }
   });
 
   // user leaves main page (navigates away)
