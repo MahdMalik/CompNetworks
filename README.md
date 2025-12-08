@@ -13,8 +13,7 @@ Afterwards, return to the original directory with "cd ..", and go into the backe
 
 Now, to actually run the program, 2 things need to be done: first is running the backend server. To run it, while still in the backend folder, run "npm run dev" in your terminal. You should see something printed to the terminal saying "socket server listening on {port number}". Now, so that you don't accidentally close the server, open another terminal in VS code. Navigate this back to the frontend folder using cd commands, then run "npm run dev". It will print out a website such as "http://localhost:300" and say "starting... ready in ___ms", which means it succeeded.
 
-To now view the application, if you want to run 2 clientws from the same computer, open the URL "http://localhost:3000" in two separate browsers. Then, use the website as normal.
-# Make sure to sign in with tow separate accounts for each browser; don't use the same google/github account for both.
+To now view the application, if you want to run 2 clientws from the same computer, open the URL "http://localhost:3000" in two separate browsers. Then, use the website as normal. **Make sure to sign in with two separate accounts for each browser; don't use the same google/github account for both.**
 
 You should be able to see both clients on both browsers communicate with the backend server to connect with each other now.
 
