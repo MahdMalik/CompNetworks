@@ -1,93 +1,25 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Note: this guide assumes that you are using VS Code; the process for other IDEs may be slightly different.
 
-## Getting Started
+First, prior to anything else, take the ".env" file found in the Elearning submission, and put it into ChosenRepoFolder/frontend.
 
-First, run the development server:
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+Next, make sure you have npm installed on your computer. To do this, install node.js on your computer if you don't have it already, which can be found at https://nodejs.org/en. Make sure it works by running "npm -v" in your VS Code terminal. If it shows that there is an error, you may need to add the file path to node.js to your PATH environmental variable.
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Next, you need to install some dependencies used on the frontend and backend side.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+For the frontend, first go into the frontend directory from the terminal with "cd frontend". Then, inside run "npm install" in your terminal, which should install all the major components. You'll know it succeeded if you see a file called "node_modules" be made. Note that this may take a while to run.
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Afterwards, return to the original directory with "cd ..", and go into the backend directory with "cd backend". Likewise, run "npm install" in your terminal within this directory. Again, you'll know it succeeded if you see a file called "node_modules" be made. Note that this may take a while to run.
 
-## Clerk setup (Sign-in)
+Now, to actually run the program, 2 things need to be done: first is running the backend server. To run it, while still in the backend folder, run "npm run dev" in your terminal. You should see something printed to the terminal saying "socket server listening on {port number}". Now, so that you don't accidentally close the server, open another terminal in VS code. Navigate this back to the frontend folder using cd commands, then run "npm run dev". It will print out a website such as "http://localhost:300" and say "starting... ready in ___ms", which means it succeeded.
 
-This project includes a basic Clerk sign-in integration scaffolded in the app:
+To now view the application, if you want to run 2 clientws from the same computer, open the URL "http://localhost:3000" in two separate browsers. Then, use the website as normal.
+# Make sure to sign in with tow separate accounts for each browser; don't use the same google/github account for both.
 
-- `app/clerk/ClerkProviderClient.tsx` — client wrapper for `ClerkProvider`.
-- `app/sign-in/page.tsx` — sign-in page that renders Clerk's `<SignIn />` component.
+You should be able to see both clients on both browsers communicate with the backend server to connect with each other now.
 
-To enable Clerk locally:
+However, if you wanted to try communication between different devices, this is also possible, with one change required. When visited the computer with teh same website that the code is running on, going to "http://localhost:3000" will suffice. However, if say you are trying to access the website from a phone, you **cannot** go to this website. Instead, you want to replace localhost with the ip address that the computer is using. Finding this is very simple; when runing "npm run dev", you'll see alongside "Local: http://localhost:3000" the line "Network: http://IP_ADDR:3000". Basically, you just have to visit this website from the other ddvice, instead of localhost. Attached is an image to visualize this clearer. As a reminder, visiting http://localhost:3000 will work fine if it's the same computer the program's running on, otherwise you must go to the ip address directly with the URL.
 
-1. Install the new dependency:
+Now, you should see the communications work perfectly! Just make sure all related devices are on the same local network.
 
-```powershell
-npm install
-```
-
-Also install this:
-```
-npm install express ssh2-sftp-client @types/express --save
-npm run dev
-```
-
-2. Create a `.env.local` file in the project root with these variables (values from your Clerk dashboard):
-
-```text
-NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_your_publishable_key_here
-# optional server-side key used by Clerk SDKs
-CLERK_API_KEY=sk_your_api_key_here
-```
-
-3. Start the dev server:
-
-```powershell
-npm run dev
-```
-
-If you don't set the env vars yet, the app will still run, but Clerk functionality will not be available until the keys are configured.
-
-### Encryption key for middleware
-
-If you use Clerk's middleware with `secretKey` (the server secret), the middleware requires an additional `CLERK_ENCRYPTION_KEY` to securely propagate the secret. Without it you'll see an error like "Missing CLERK_ENCRYPTION_KEY".
-
-Generate a secure key (32 bytes or more) and add it to `.env.local`:
-
-```powershell
-# generate a 32-byte hex key using Node
-node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
-
-# then add to .env.local
-# CLERK_ENCRYPTION_KEY=your_generated_hex_value
-```
-
-Restart the dev server after adding env vars:
-
-```powershell
-npm run dev
-```
-
-## Learn More
-
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+As a final unrelated not, when navigating to pages, sometimes it will take a really long time for all the elements to load, up to ~15 seconds. It is loading a new page though, which you can tell from the URL changing.
