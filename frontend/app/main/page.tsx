@@ -126,7 +126,15 @@ export default function MainPage() {
   }, [requestSent]);
 
   useEffect(() => {
+    if(socketRef === null)
+    {
+      return;
+    }
     const socket = socketRef.current;
+    if(socket === null)
+    {
+      return;
+    }
 
     // join with username on load
     if (user && isSignedIn && role) {
@@ -184,7 +192,18 @@ export default function MainPage() {
       return;
     }
 
+    if(socketRef === null)
+    {
+      return;
+    }
+
     const socket = socketRef.current;
+
+    if(socket === null)
+    {
+      return;
+    }
+
     socket.emit("send_connection_request", targetUser.socketId);
     setTargetUsername("");
     setRequestSent(true);
@@ -193,7 +212,18 @@ export default function MainPage() {
   const handleAcceptRequest = () => {
     if (!incomingRequest) return;
 
+    if(socketRef === null)
+    {
+      return;
+    }
+
     const socket = socketRef.current;
+
+    if(socket === null)
+    {
+      return;
+    }
+    
     socket.emit("accept_connection_request", incomingRequest.senderId);
     setIncomingRequest(null);
   };
@@ -201,7 +231,18 @@ export default function MainPage() {
   const handleRejectRequest = () => {
     if (!incomingRequest) return;
 
+    if(socketRef === null)
+    {
+      return;
+    }
+
     const socket = socketRef.current;
+
+    if(socket === null)
+    {
+      return;
+    }
+    
     socket.emit("reject_connection_request", incomingRequest.senderId);
     setIncomingRequest(null);
   };

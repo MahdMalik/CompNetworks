@@ -98,6 +98,10 @@ export default function SessionPage() {
 
         console.log("Effect running normally");
         const socket = getSocket();
+        if(socket === null)
+        {
+            return;
+        }
         const username = sessionStorage.getItem("username");
         const userRole = sessionStorage.getItem("role") as "artist" | "viewer" | null;
 
@@ -170,6 +174,11 @@ export default function SessionPage() {
 
     const handleLeave = () => {
         const socket = getSocket();
+        if(socket === null)
+        {
+            return;
+        }
+
         socket.emit("leave_session", sessionId);
         router.push("/");
     };
@@ -177,6 +186,11 @@ export default function SessionPage() {
     const handleGetImages = async () => {
         setLoadingImages(true);
         const socket = getSocket();
+
+        if(socket === null)
+        {
+            return;
+        }
         
         socket.emit("request_portfolio_images", {
             ipAddress,
@@ -195,6 +209,12 @@ export default function SessionPage() {
         setSelectedImage(dataUrl);
         // Send image to viewer through socket
         const socket = getSocket();
+
+        if(socket === null)
+        {
+            return;
+        }
+
         socket.emit("send_image", { sessionId, imageUrl: dataUrl });
     };
 
