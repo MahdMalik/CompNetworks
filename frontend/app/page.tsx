@@ -8,6 +8,7 @@ export default function Home() {
   const { isSignedIn } = useUser();
   const svgRef = useRef<SVGSVGElement>(null);
 
+  // sets up the particles used on every page. Now that i tthink about it i should've really made this component
   useEffect(() => {
     const el = svgRef.current;
     if (!el) return;
@@ -15,6 +16,7 @@ export default function Home() {
     const particles: Array<{ x: number; y: number; vx: number; vy: number }> = [];
     const particleCount = 120;
     
+    // initializes the particles
     for (let i = 0; i < particleCount; i++) {
       particles.push({
         x: Math.random() * el.clientWidth,
@@ -24,6 +26,7 @@ export default function Home() {
       });
     }
 
+    // animates them moving across and connecting
     const animate = () => {
       const svg = el;
       svg.innerHTML = '';
@@ -90,6 +93,7 @@ export default function Home() {
               </div>
             </div>
 
+            {/* Sets up the navigation  bar that allows them to either sing out or sign in, depending on their sign in status */}
             <nav className="flex items-center gap-3">
               {isSignedIn ? (
                 <SignOutButton>
@@ -103,7 +107,8 @@ export default function Home() {
                 </Link>
               )}
 
-              <Link href="/docs" className="rounded-full border-2 border-purple-300 dark:border-purple-700 text-purple-600 dark:text-purple-300 px-4 py-2 hover:bg-purple-50 dark:hover:bg-purple-950/50 transition">Docs</Link>
+              {/* Link to our github */}
+              <Link href="https://github.com/MahdMalik/CompNetworks" className="rounded-full border-2 border-purple-300 dark:border-purple-700 text-purple-600 dark:text-purple-300 px-4 py-2 hover:bg-purple-50 dark:hover:bg-purple-950/50 transition">Docs</Link>
             </nav>
           </header>
 
@@ -129,6 +134,7 @@ export default function Home() {
               </div>
 
               <div className="mt-6 flex gap-3">
+                {/* Addition logout and sign in button */}
                 {isSignedIn ? (
                   <SignOutButton>
                     <button className="inline-block rounded-lg bg-gradient-to-r from-purple-600 to-purple-700 px-5 py-3 text-white hover:shadow-lg hover:shadow-purple-500/50 transition-all font-medium cursor-pointer">
@@ -141,6 +147,7 @@ export default function Home() {
                   </Link>
                 )}
 
+                {/* Links them to the portoflio */}
                 <Link href="/main" className="inline-block rounded-lg border-2 border-purple-300 dark:border-purple-700 text-purple-600 dark:text-purple-300 px-5 py-3 hover:bg-purple-50 dark:hover:bg-purple-950/50 transition font-medium">
                   Create portfolio
                 </Link>
@@ -176,9 +183,6 @@ export default function Home() {
 
           <footer className="flex items-center justify-between text-sm text-gray-500 border-t border-purple-200 dark:border-purple-800 pt-6">
             <div>Built with Next.js — prototype landing copy</div>
-            <div>
-              <Link href="/about" className="text-purple-600 dark:text-purple-400 hover:text-purple-700 dark:hover:text-purple-300 underline">Learn more</Link>
-            </div>
           </footer>
         </main>
       </div>

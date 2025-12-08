@@ -3,6 +3,7 @@
 import { ReactNode } from "react";
 import { ClerkProvider } from "@clerk/nextjs";
 
+//This basically sets the key for Clerk to allow it to be used in the app.
 export default function ClerkProviderClient({ children }: { children: ReactNode }) {
   // Provide the publishable key via NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY
   // If the publishable key is not configured, render children without Clerk

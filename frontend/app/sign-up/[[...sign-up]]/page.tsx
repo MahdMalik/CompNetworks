@@ -6,6 +6,7 @@ import { useRef, useEffect } from "react";
 export default function SignUpPage() {
   const svgRef = useRef<SVGSVGElement>(null);
 
+  // generates the particles
   useEffect(() => {
     const el = svgRef.current;
     if (!el) return;
@@ -13,6 +14,7 @@ export default function SignUpPage() {
     const particles: Array<{ x: number; y: number; vx: number; vy: number }> = [];
     const particleCount = 120;
     
+    // initijalizes the particles and speeds
     for (let i = 0; i < particleCount; i++) {
       particles.push({
         x: Math.random() * el.clientWidth,
@@ -22,6 +24,7 @@ export default function SignUpPage() {
       });
     }
 
+    // moves the particles and connects them as necessary
     const animate = () => {
       const svg = el;
       svg.innerHTML = '';
@@ -79,6 +82,7 @@ export default function SignUpPage() {
         <div className="w-full max-w-lg rounded-lg bg-white p-8 shadow-2xl dark:bg-slate-900 border-2 border-red-400 dark:border-red-600 transition-all duration-300 hover:scale-105 hover:[box-shadow:0_0_50px_rgba(239,68,68,0.5)]">
           <h1 className="mb-2 text-3xl font-bold bg-gradient-to-r from-red-600 to-purple-600 bg-clip-text text-transparent">Sign up</h1>
           <p className="mb-6 text-sm text-gray-600 dark:text-gray-400">Create your portfolio today</p>
+          {/* Clerk allows us to just pop in this element and let it dow all the work */}
           <SignUp
             path="/sign-up"
             fallbackRedirectUrl="/main"

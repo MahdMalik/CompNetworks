@@ -29,6 +29,7 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
+        {/* This basically wraps our entire page inside the clerk client, so that clerk components can be used freely inside */}
         <ClerkProviderClient>
           <div className="w-full max-w-6xl mx-auto px-6">
             <header className="flex items-center justify-between py-4">

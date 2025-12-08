@@ -6,13 +6,16 @@ import { useRef, useEffect } from "react";
 export default function SignInPage() {
   const svgRef = useRef<SVGSVGElement>(null);
 
+  // this is the stuff to display the particles to the screen
   useEffect(() => {
     const el = svgRef.current;
     if (!el) return;
 
+    // setusp the particles
     const particles: Array<{ x: number; y: number; vx: number; vy: number }> = [];
     const particleCount = 120;
     
+    // sets their position and speeds
     for (let i = 0; i < particleCount; i++) {
       particles.push({
         x: Math.random() * el.clientWidth,
@@ -22,6 +25,7 @@ export default function SignInPage() {
       });
     }
 
+    // animates them moving and conected when close enough. I'm kinda tired of typing this every single time but only 2 more pages to go to tepe it for
     const animate = () => {
       const svg = el;
       svg.innerHTML = '';
@@ -55,6 +59,7 @@ export default function SignInPage() {
           }
         });
 
+        // sets the dots that actulaly make up this element
         const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
         circle.setAttribute('cx', String(p.x));
         circle.setAttribute('cy', String(p.y));
@@ -79,6 +84,7 @@ export default function SignInPage() {
         <div className="w-full max-w-lg rounded-lg bg-white p-8 shadow-2xl dark:bg-slate-900 border-2 border-red-400 dark:border-red-600 transition-all duration-300 hover:scale-105 hover:[box-shadow:0_0_50px_rgba(239,68,68,0.5)]">
           <h1 className="mb-2 text-3xl font-bold bg-gradient-to-r from-purple-600 to-red-600 bg-clip-text text-transparent">Sign in</h1>
           <p className="mb-6 text-sm text-gray-600 dark:text-gray-400">Welcome back to CompNetworks</p>
+          {/* Clerk makes it easy to just plug in the sign in element here and have it done. */}
           <SignIn 
             path="/sign-in"
             fallbackRedirectUrl="/main"
