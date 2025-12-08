@@ -19,6 +19,9 @@ You should be able to see both clients on both browsers communicate with the bac
 
 However, if you wanted to try communication between different devices, this is also possible, with one change required. When visited the computer with teh same website that the code is running on, going to "http://localhost:3000" will suffice. However, if say you are trying to access the website from a phone, you **cannot** go to this website. Instead, you want to replace localhost with the ip address that the computer is using. Finding this is very simple; when runing "npm run dev", you'll see alongside "Local: http://localhost:3000" the line "Network: http://IP_ADDR:3000". Basically, you just have to visit this website from the other ddvice, instead of localhost. Attached is an image to visualize this clearer. As a reminder, visiting http://localhost:3000 will work fine if it's the same computer the program's running on, otherwise you must go to the ip address directly with the URL.
 
+<img width="475" height="200" alt="image" src="https://github.com/user-attachments/assets/76b68ba4-7254-47d9-a5cb-1f2becd6fadd" />
+
+
 Now, you should see the communications work perfectly! Just make sure all related devices are on the same local network.
 
 As a final unrelated not, when navigating to pages, sometimes it will take a really long time for all the elements to load, up to ~15 seconds. It is loading a new page though, which you can tell from the URL changing.
