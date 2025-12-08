@@ -24,4 +24,4 @@ However, if you wanted to try communication between different devices, this is a
 
 Now, you should see the communications work perfectly! Just make sure all related devices are on the same local network.
 
-As a final unrelated not, when navigating to pages, sometimes it will take a really long time for all the elements to load, up to ~15 seconds. It is loading a new page though, which you can tell from the URL changing.
+As a final unrelated note, when navigating to pages, sometimes it will take a really long time for all the elements to load, up to ~15 seconds. It is loading a new page though, which you can tell from the URL changing.
